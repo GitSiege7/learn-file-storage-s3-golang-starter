@@ -90,10 +90,26 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	ratio, err := getVideoAspectRatio(tempFile.Name())
+	if err != nil {
+		respondWithError(w, 500, "Failed to get aspect ratio", err)
+		return
+	}
+
+	var prefix string
+	switch ratio {
+	case "16:9":
+		prefix = "landscape"
+	case "9:16":
+		prefix = "portrait"
+	default:
+		prefix = "other"
+	}
+
 	bucket_name := "tubely-48573"
 	bytes := make([]byte, 32)
 	rand.Read(bytes)
-	key := fmt.Sprintf("%v.mp4", base64.RawURLEncoding.EncodeToString(bytes))
+	key := fmt.Sprintf("%v/%v.mp4", prefix, base64.RawURLEncoding.EncodeToString(bytes))
 
 	_, err = cfg.s3client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &bucket_name,
