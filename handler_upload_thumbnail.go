@@ -1,9 +1,15 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -45,14 +51,15 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, 500, "Failed form file", err)
 		return
 	}
+	defer file.Close()
 
-	mediaType := header.Header.Get("Content-Type")
-
-	bytes, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, 500, "Failed to read file data", err)
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	if err != nil || (mediaType != "image/jpeg" && mediaType != "image/png") {
+		respondWithError(w, 400, "Invalid media type", err)
 		return
 	}
+
+	ext := strings.Split(mediaType, "/")[1]
 
 	meta, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -65,14 +72,26 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	videoThumbnails[videoID] = thumbnail{
-		data:      bytes,
-		mediaType: mediaType,
+	bytes := make([]byte, 32)
+	rand.Read(bytes)
+
+	filename := fmt.Sprintf("%v.%v", base64.RawURLEncoding.EncodeToString(bytes), ext)
+
+	fp, err := os.Create(filepath.Join(cfg.assetsRoot, filename))
+	if err != nil {
+		respondWithError(w, 500, "Failed to create file", err)
+		return
 	}
 
-	thumbURL := fmt.Sprintf("http://localhost:8091/api/thumbnails/%v", videoID)
+	_, err = io.Copy(fp, file)
+	if err != nil {
+		respondWithError(w, 500, "Failed to copy data", err)
+		return
+	}
 
-	meta.ThumbnailURL = &thumbURL
+	datURL := fmt.Sprintf("http://localhost:8091/assets/%v", filename)
+
+	meta.ThumbnailURL = &datURL
 
 	cfg.db.UpdateVideo(meta)
 
