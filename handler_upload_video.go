@@ -84,11 +84,11 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err = tempFile.Seek(0, io.SeekStart)
-	if err != nil {
-		respondWithError(w, 500, "Failed to reset file pointer", err)
-		return
-	}
+	// _, err = tempFile.Seek(0, io.SeekStart)
+	// if err != nil {
+	// 	respondWithError(w, 500, "Failed to reset file pointer", err)
+	// 	return
+	// }
 
 	ratio, err := getVideoAspectRatio(tempFile.Name())
 	if err != nil {
@@ -106,6 +106,19 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		prefix = "other"
 	}
 
+	outputPath, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, 500, "Failed to fast start video", err)
+		return
+	}
+
+	procVid, err := os.Open(outputPath)
+	if err != nil {
+		respondWithError(w, 500, "Failed to open processed video", err)
+		return
+	}
+	defer procVid.Close()
+
 	bucket_name := "tubely-48573"
 	bytes := make([]byte, 32)
 	rand.Read(bytes)
@@ -114,7 +127,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	_, err = cfg.s3client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &bucket_name,
 		Key:         &key,
-		Body:        tempFile,
+		Body:        procVid,
 		ContentType: &mediaType,
 	})
 	if err != nil {
