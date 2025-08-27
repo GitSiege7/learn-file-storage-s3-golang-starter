@@ -119,13 +119,12 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	defer procVid.Close()
 
-	bucket_name := "tubely-48573"
 	bytes := make([]byte, 32)
 	rand.Read(bytes)
 	key := fmt.Sprintf("%v/%v.mp4", prefix, base64.RawURLEncoding.EncodeToString(bytes))
 
 	_, err = cfg.s3client.PutObject(r.Context(), &s3.PutObjectInput{
-		Bucket:      &bucket_name,
+		Bucket:      &cfg.s3Bucket,
 		Key:         &key,
 		Body:        procVid,
 		ContentType: &mediaType,
@@ -135,7 +134,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	url := fmt.Sprintf("https://%v.s3.%v.amazonaws.com/%v", bucket_name, cfg.s3Region, key)
+	url := fmt.Sprintf("https://%v.s3.%v.amazonaws.com/%v", cfg.s3Bucket, cfg.s3Region, key)
 	meta.VideoURL = &url
 
 	cfg.db.UpdateVideo(meta)
